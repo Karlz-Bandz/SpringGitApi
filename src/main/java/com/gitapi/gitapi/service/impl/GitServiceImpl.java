@@ -14,8 +14,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
-
 @Service
 public class GitServiceImpl implements GitService {
     private static final String GIT_API_URL = "https://api.github.com";
@@ -43,30 +41,24 @@ public class GitServiceImpl implements GitService {
     public Mono<GitMasterDto> getRepositories(String username) {
         String apiUrl = GIT_API_URL + "/users/" + username + "/repos";
         try {
-            Flux<GitDto> response = webClient.get()
+            return webClient.get()
                     .uri(apiUrl)
                     .retrieve()
                     .bodyToFlux(RepoDto.class)
-                    .flatMap(repoDto -> {
-                        return getBranchesForRepository(username, repoDto.getName())
-                                .collectList()
-                                .map(branches -> {
-                                    return GitDto.builder()
-                                            .repoName(repoDto.getName())
-                                            .branches(branches)
-                                            .build();
-                                });
-
-                    });
-
-            List<GitDto> repos = response.collectList().block();
-
-            GitMasterDto gitMasterDto = GitMasterDto.builder()
-                    .userName(username)
-                    .repositories(repos)
-                    .build();
-
-            return Mono.just(gitMasterDto);
+                    .flatMap(repoDto ->
+                            getBranchesForRepository(username, repoDto.getName())
+                                    .collectList()
+                                    .map(branches ->
+                                            GitDto.builder()
+                                                    .repoName(repoDto.getName())
+                                                    .branches(branches)
+                                                    .build()))
+                    .collectList()
+                    .map(repos ->
+                            GitMasterDto.builder()
+                                    .userName(username)
+                                    .repositories(repos)
+                                    .build());
 
         } catch (HttpClientErrorException.Unauthorized unauthorized) {
             throw new GitUnauthorizedException("You are unauthorized!");
